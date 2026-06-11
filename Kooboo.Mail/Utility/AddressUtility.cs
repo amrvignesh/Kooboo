@@ -10,6 +10,8 @@ namespace Kooboo.Mail.Utility
 {
     public static class AddressUtility
     {
+        private static readonly IdnMapping _idnMapping = new IdnMapping();
+
         public static bool IsValidEmailAddress(string input)
         {
             if (string.IsNullOrEmpty(input))
@@ -30,8 +32,7 @@ namespace Kooboo.Mail.Utility
             // Convert IDN to Punycode for validation (backwards compatible - ASCII passes through)
             try
             {
-                var idn = new IdnMapping();
-                domain = idn.GetAscii(domain);
+                domain = _idnMapping.GetAscii(domain);
             }
             catch { } // ASCII domains and invalid IDN pass through unchanged
 
@@ -108,7 +109,18 @@ namespace Kooboo.Mail.Utility
 
             int index = emailAddress.LastIndexOf("@");
 
-            return index > -1 ? emailAddress.Substring(index + 1) : null;
+            if (index > -1)
+            {
+                string host = emailAddress.Substring(index + 1);
+                try
+                {
+                    host = _idnMapping.GetAscii(host);
+                }
+                catch { }
+                return host;
+            }
+
+            return null;
         }
 
         public static bool IsOrganizationOk(string emailaddress)
@@ -237,6 +249,31 @@ namespace Kooboo.Mail.Utility
             }
         }
 
+        public static string GetPunycodeAddress(string address)
+        {
+            if (string.IsNullOrEmpty(address))
+            {
+                return address;
+            }
+
+            int index = address.LastIndexOf("@");
+            if (index > -1 && index < address.Length - 1)
+            {
+                string local = address.Substring(0, index);
+                string host = address.Substring(index + 1);
+                try
+                {
+                    string asciiHost = _idnMapping.GetAscii(host);
+                    return local + "@" + asciiHost;
+                }
+                catch
+                {
+                    // If IDN conversion fails, return original
+                }
+            }
+            return address;
+        }
+
         public static EmailSegment ParseSegment(string emailaddress)
         {
             if (emailaddress == null)
@@ -248,7 +285,17 @@ namespace Kooboo.Mail.Utility
             {
                 return default(EmailSegment);
             }
-            return new EmailSegment() { Address = emailaddress.Substring(0, index), Host = emailaddress.Substring(index + 1) };
+
+            string local = emailaddress.Substring(0, index);
+            string host = emailaddress.Substring(index + 1);
+
+            try
+            {
+                host = _idnMapping.GetAscii(host);
+            }
+            catch { }
+
+            return new EmailSegment() { Address = local, Host = host };
         }
 
         public static string GetDisplayName(string FullAddress)
