@@ -50,6 +50,12 @@ namespace Kooboo.Mail.Utility
                 {
                     continue;
                 }
+                // Allow combining marks which are part of complex scripts (e.g. Indic scripts, Tamil vowel signs)
+                var cat = char.GetUnicodeCategory(currentchar);
+                if (cat == UnicodeCategory.NonSpacingMark || cat == UnicodeCategory.SpacingCombiningMark || cat == UnicodeCategory.EnclosingMark)
+                {
+                    continue;
+                }
                 // Allow special characters commonly used in email local parts
                 else if (currentchar == '.' || currentchar == '+' || currentchar == '_' || currentchar == '*' || currentchar == '-' || currentchar == '=' || currentchar == '&')
                 {
