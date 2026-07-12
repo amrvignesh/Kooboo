@@ -2,6 +2,7 @@
 //All rights reserved.
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Kooboo.Mail.Transport;
 using MimeKit;
 
@@ -9,6 +10,8 @@ namespace Kooboo.Mail.Utility
 {
     public static class AddressUtility
     {
+        private static readonly IdnMapping _idnMapping = new IdnMapping();
+
         public static bool IsValidEmailAddress(string input)
         {
             if (string.IsNullOrEmpty(input))
@@ -26,6 +29,13 @@ namespace Kooboo.Mail.Utility
 
         internal static bool IsValidEmailDomain(string domain)
         {
+            // Convert IDN to Punycode for validation (backwards compatible - ASCII passes through)
+            try
+            {
+                domain = _idnMapping.GetAscii(domain);
+            }
+            catch { } // ASCII domains and invalid IDN pass through unchanged
+
             var result = Kooboo.Data.Helper.DomainHelper.Parse(domain);
             return result != null && !string.IsNullOrEmpty(result.Domain);
         }
@@ -35,21 +45,18 @@ namespace Kooboo.Mail.Utility
             for (int i = 0; i < input.Length; i++)
             {
                 var currentchar = input[i];
-                ///  48 - 57   0x30 - 0x39   0 - 9 OK Allowed without restrictions.
-                if (currentchar <= 57 && currentchar >= 48)
+                // Allow Unicode letters and digits (RFC 6531 EAI support)
+                if (char.IsLetterOrDigit(currentchar))
                 {
                     continue;
                 }
-                //  97 - 122   0x61 - 0x7a   a - z OK Allowed without restrictions. 
-                else if (currentchar <= 122 && currentchar >= 97)
+                // Allow combining marks which are part of complex scripts (e.g. Indic scripts, Tamil vowel signs)
+                var cat = char.GetUnicodeCategory(currentchar);
+                if (cat == UnicodeCategory.NonSpacingMark || cat == UnicodeCategory.SpacingCombiningMark || cat == UnicodeCategory.EnclosingMark)
                 {
                     continue;
                 }
-                //65 - 90   0x41 - 0x5a   A - Z OK Allowed without restrictions.
-                else if (currentchar >= 65 && currentchar <= 90)
-                {
-                    continue;
-                }
+                // Allow special characters commonly used in email local parts
                 else if (currentchar == '.' || currentchar == '+' || currentchar == '_' || currentchar == '*' || currentchar == '-' || currentchar == '=' || currentchar == '&')
                 {
                     continue;
@@ -108,7 +115,18 @@ namespace Kooboo.Mail.Utility
 
             int index = emailAddress.LastIndexOf("@");
 
-            return index > -1 ? emailAddress.Substring(index + 1) : null;
+            if (index > -1)
+            {
+                string host = emailAddress.Substring(index + 1);
+                try
+                {
+                    host = _idnMapping.GetAscii(host);
+                }
+                catch { }
+                return host;
+            }
+
+            return null;
         }
 
         public static bool IsOrganizationOk(string emailaddress)
@@ -237,6 +255,31 @@ namespace Kooboo.Mail.Utility
             }
         }
 
+        public static string GetPunycodeAddress(string address)
+        {
+            if (string.IsNullOrEmpty(address))
+            {
+                return address;
+            }
+
+            int index = address.LastIndexOf("@");
+            if (index > -1 && index < address.Length - 1)
+            {
+                string local = address.Substring(0, index);
+                string host = address.Substring(index + 1);
+                try
+                {
+                    string asciiHost = _idnMapping.GetAscii(host);
+                    return local + "@" + asciiHost;
+                }
+                catch
+                {
+                    // If IDN conversion fails, return original
+                }
+            }
+            return address;
+        }
+
         public static EmailSegment ParseSegment(string emailaddress)
         {
             if (emailaddress == null)
@@ -248,7 +291,17 @@ namespace Kooboo.Mail.Utility
             {
                 return default(EmailSegment);
             }
-            return new EmailSegment() { Address = emailaddress.Substring(0, index), Host = emailaddress.Substring(index + 1) };
+
+            string local = emailaddress.Substring(0, index);
+            string host = emailaddress.Substring(index + 1);
+
+            try
+            {
+                host = _idnMapping.GetAscii(host);
+            }
+            catch { }
+
+            return new EmailSegment() { Address = local, Host = host };
         }
 
         public static string GetDisplayName(string FullAddress)
