@@ -1,4 +1,4 @@
-﻿//Copyright (c) 2018 Yardi Technology Limited. Http://www.kooboo.com 
+//Copyright (c) 2018 Yardi Technology Limited. Http://www.kooboo.com 
 //All rights reserved. 
 using System.Linq;
 using Kooboo.Api;
@@ -317,6 +317,13 @@ namespace Kooboo.Web.Api.Implementation
         {
             EnsureDnsRight(call);
 
+            try
+            {
+                var idn = new System.Globalization.IdnMapping();
+                domain = idn.GetAscii(domain);
+            }
+            catch {}
+
             var url = Data.Helper.AccountUrlHelper.Domain("Records");
 
             Dictionary<string, string> para = new Dictionary<string, string>();
@@ -360,6 +367,14 @@ namespace Kooboo.Web.Api.Implementation
         public bool AssignDataCenter(string Domain, string DataCenter, ApiCall call)
         {
             EnsureDnsRight(call);
+
+            try
+            {
+                var idn = new System.Globalization.IdnMapping();
+                Domain = idn.GetAscii(Domain);
+            }
+            catch {}
+
             var url = Kooboo.Data.Helper.AccountUrlHelper.Domain("AssignDataCenter");
             var para = new Dictionary<string, string>();
             para.Add("domain", Domain);
@@ -376,6 +391,24 @@ namespace Kooboo.Web.Api.Implementation
         public void AddDns(DNSRecordViewModel model, ApiCall call)
         {
             EnsureDnsRight(call);
+
+            if (model != null)
+            {
+                try
+                {
+                    var idn = new System.Globalization.IdnMapping();
+                    if (!string.IsNullOrEmpty(model.Domain))
+                    {
+                        model.Domain = idn.GetAscii(model.Domain);
+                    }
+                    if (!string.IsNullOrEmpty(model.Host))
+                    {
+                        model.Host = idn.GetAscii(model.Host);
+                    }
+                }
+                catch {}
+            }
+
             var url = Kooboo.Data.Helper.AccountUrlHelper.Domain("AddDns");
             var para = new Dictionary<string, string>();
             para.Add("UserId", call.Context.User.Id.ToString());
@@ -405,6 +438,13 @@ namespace Kooboo.Web.Api.Implementation
 
         public string GetTransferCode(string domain, ApiCall call)
         {
+            try
+            {
+                var idn = new System.Globalization.IdnMapping();
+                domain = idn.GetAscii(domain);
+            }
+            catch {}
+
             var url = Kooboo.Data.Helper.AccountUrlHelper.Domain("GetTransferCode");
 
             var json = System.Text.Json.JsonSerializer.Serialize(new

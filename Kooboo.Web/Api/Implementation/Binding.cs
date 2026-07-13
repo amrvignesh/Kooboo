@@ -1,4 +1,4 @@
-﻿//Copyright (c) 2018 Yardi Technology Limited. Http://www.kooboo.com 
+//Copyright (c) 2018 Yardi Technology Limited. Http://www.kooboo.com 
 //All rights reserved.
 using System.Linq;
 using Kooboo.Api;
@@ -82,6 +82,25 @@ namespace Kooboo.Web.Api.Implementation
         {
             string subdomain = call.GetValue("subdomain");
             string RootDomain = call.GetValue("rootdomain");
+
+            if (!string.IsNullOrEmpty(RootDomain))
+            {
+                try
+                {
+                    var idn = new System.Globalization.IdnMapping();
+                    RootDomain = idn.GetAscii(RootDomain);
+                }
+                catch {}
+            }
+            if (!string.IsNullOrEmpty(subdomain))
+            {
+                try
+                {
+                    var idn = new System.Globalization.IdnMapping();
+                    subdomain = idn.GetAscii(subdomain);
+                }
+                catch {}
+            }
             string redirect = call.GetValue("redirect");
             string culture = call.GetValue("culture");
             Guid SiteId = call.GetGuidValue("SiteId");
@@ -234,6 +253,20 @@ namespace Kooboo.Web.Api.Implementation
         {
             string Subdomain = call.GetValue("Subdomain");
 
+            try
+            {
+                var idn = new System.Globalization.IdnMapping();
+                if (!string.IsNullOrEmpty(rootDomain))
+                {
+                    rootDomain = idn.GetAscii(rootDomain);
+                }
+                if (!string.IsNullOrEmpty(Subdomain))
+                {
+                    Subdomain = idn.GetAscii(Subdomain);
+                }
+            }
+            catch {}
+
             string fullName = ConfigHelper.ToFullDomain(rootDomain, Subdomain);
 
             var ok = Kooboo.Data.SSL.SslService.EnsureCheck(fullName);
@@ -250,6 +283,20 @@ namespace Kooboo.Web.Api.Implementation
         public void SetSsl(string rootDomain, ApiCall call)
         {
             string Subdomain = call.GetValue("Subdomain");
+
+            try
+            {
+                var idn = new System.Globalization.IdnMapping();
+                if (!string.IsNullOrEmpty(rootDomain))
+                {
+                    rootDomain = idn.GetAscii(rootDomain);
+                }
+                if (!string.IsNullOrEmpty(Subdomain))
+                {
+                    Subdomain = idn.GetAscii(Subdomain);
+                }
+            }
+            catch {}
 
             string fullName = ConfigHelper.ToFullDomain(rootDomain, Subdomain);
 

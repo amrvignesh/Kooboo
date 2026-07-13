@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Kooboo.Lib.Domain
@@ -127,6 +127,14 @@ namespace Kooboo.Lib.Domain
             {
                 domainSuffix = domainSuffix.Substring(2);
             }
+
+            try
+            {
+                var idn = new System.Globalization.IdnMapping();
+                domainSuffix = idn.GetAscii(domainSuffix);
+            }
+            catch {}
+
             var currentPath = this.Root;
 
             var parts = domainSuffix.Split('.', StringSplitOptions.RemoveEmptyEntries);

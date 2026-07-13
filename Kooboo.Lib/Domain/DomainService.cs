@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -8,6 +8,18 @@ namespace Kooboo.Lib.Domain
     {
         public static bool IsValidDomain(string domain)
         {
+            if (string.IsNullOrEmpty(domain))
+            {
+                return false;
+            }
+
+            try
+            {
+                var idn = new System.Globalization.IdnMapping();
+                domain = idn.GetAscii(domain);
+            }
+            catch {}
+
             if (!IsValidDomainChar(domain))
             {
                 return false;
@@ -19,6 +31,18 @@ namespace Kooboo.Lib.Domain
 
         public static DomainResult Parse(string domain)
         {
+            if (string.IsNullOrEmpty(domain))
+            {
+                return null;
+            }
+
+            try
+            {
+                var idn = new System.Globalization.IdnMapping();
+                domain = idn.GetAscii(domain);
+            }
+            catch {}
+
             if (!IsValidDomainChar(domain))
             {
                 return null;
@@ -78,6 +102,10 @@ namespace Kooboo.Lib.Domain
 
         public static bool IsValidDomainChar(string domain)
         {
+            if (domain == null)
+            {
+                return false;
+            }
             for (int i = 0; i < domain.Length; i++)
             {
                 var current = domain[i];
