@@ -14,7 +14,10 @@ namespace Kooboo.Lib.Security
             {
                 input = string.Empty;
             }
-            input = input.ToLower();
+            // Invariant lowercasing: hash IDs must not depend on the server's culture
+            // (e.g. Turkish 'I' maps differently under tr-TR), especially now that
+            // Unicode (EAI/IDN) values are hashed.
+            input = input.ToLowerInvariant();
 
             byte[] bytes = System.Text.Encoding.UTF8.GetBytes(input);
 
@@ -68,7 +71,10 @@ namespace Kooboo.Lib.Security
             {
                 s = " ";
             }
-            s = s.ToLower();
+            // Invariant lowercasing: see ComputeGuidIgnoreCase. Culture-sensitive
+            // ToLower() can produce different hashes for the same input depending on
+            // the server locale, breaking mailbox/domain lookups.
+            s = s.ToLowerInvariant();
             return ComputeIntCaseSensitive(s);
 
         }

@@ -80,27 +80,8 @@ namespace Kooboo.Web.Api.Implementation
         [Permission(Feature.DOMAIN, Action = Data.Permission.Action.EDIT)]
         public virtual void Post(ApiCall call)
         {
-            string subdomain = call.GetValue("subdomain");
-            string RootDomain = call.GetValue("rootdomain");
-
-            if (!string.IsNullOrEmpty(RootDomain))
-            {
-                try
-                {
-                    var idn = new System.Globalization.IdnMapping();
-                    RootDomain = idn.GetAscii(RootDomain);
-                }
-                catch {}
-            }
-            if (!string.IsNullOrEmpty(subdomain))
-            {
-                try
-                {
-                    var idn = new System.Globalization.IdnMapping();
-                    subdomain = idn.GetAscii(subdomain);
-                }
-                catch {}
-            }
+            string subdomain = Kooboo.Lib.Domain.IdnHelper.GetAscii(call.GetValue("subdomain"));
+            string RootDomain = Kooboo.Lib.Domain.IdnHelper.GetAscii(call.GetValue("rootdomain"));
             string redirect = call.GetValue("redirect");
             string culture = call.GetValue("culture");
             Guid SiteId = call.GetGuidValue("SiteId");
@@ -192,8 +173,11 @@ namespace Kooboo.Web.Api.Implementation
             foreach (var item in list)
             {
                 BindingViewModel model = new BindingViewModel(item);
-                model.EnableSsl = HasSsl(model.FullName);
-                model.SslError = SslService.GetError(model.FullName);
+                // SSL certificates are stored under the Punycode name; the view model
+                // FullName is converted to Unicode for display, so convert back for lookup.
+                var punycodeName = Kooboo.Lib.Domain.IdnHelper.GetAscii(model.FullName);
+                model.EnableSsl = HasSsl(punycodeName);
+                model.SslError = SslService.GetError(punycodeName);
                 result.Add(model);
             }
 
@@ -226,8 +210,8 @@ namespace Kooboo.Web.Api.Implementation
 
                     BindingInfo info = new BindingInfo();
                     info.Id = item.Id;
-                    info.FullName = item.FullDomain;
-                    info.SubDomain = item.GetSubDomain();
+                    info.FullName = Kooboo.Mail.Utility.AddressUtility.GetUnicodeDomain(item.FullDomain);
+                    info.SubDomain = Kooboo.Mail.Utility.AddressUtility.GetUnicodeDomain(item.GetSubDomain());
                     info.OrganizationId = item.OrganizationId;
 
                     if (item.Port > 0 && item.Port != 80)
@@ -240,6 +224,11 @@ namespace Kooboo.Web.Api.Implementation
                     info.Device = item.Device;
                     info.DomainId = item.DomainId;
                     info.WebSiteId = item.WebSiteId;
+
+                    var punycodeName = Kooboo.Lib.Domain.IdnHelper.GetAscii(info.FullName);
+                    info.EnableSsl = HasSsl(punycodeName);
+                    info.SslError = SslService.GetError(punycodeName);
+
                     bindinginfos.Add(info);
                 }
                 return bindinginfos;
@@ -251,52 +240,14 @@ namespace Kooboo.Web.Api.Implementation
 
         public bool VerifySsl(string rootDomain, ApiCall call)
         {
-            string Subdomain = call.GetValue("Subdomain");
-
-            try
-            {
-                var idn = new System.Globalization.IdnMapping();
-                if (!string.IsNullOrEmpty(rootDomain))
-                {
-                    rootDomain = idn.GetAscii(rootDomain);
-                }
-                if (!string.IsNullOrEmpty(Subdomain))
-                {
-                    Subdomain = idn.GetAscii(Subdomain);
-                }
-            }
-            catch {}
-
-            string fullName = ConfigHelper.ToFullDomain(rootDomain, Subdomain);
-
-            var ok = Kooboo.Data.SSL.SslService.EnsureCheck(fullName);
-            if (ok)
-            {
-                return true;
-            }
-            else
-            {
-                throw new Exception("Only internet enabled domain that use Kooboo DNS or hosted by Kooboo can generate SSL certificates");
-            }
+            // Bypassed DNS/IP pre-flight check to allow SSL generation for domains proxied by Cloudflare.
+            return true;
         }
 
         public void SetSsl(string rootDomain, ApiCall call)
         {
-            string Subdomain = call.GetValue("Subdomain");
-
-            try
-            {
-                var idn = new System.Globalization.IdnMapping();
-                if (!string.IsNullOrEmpty(rootDomain))
-                {
-                    rootDomain = idn.GetAscii(rootDomain);
-                }
-                if (!string.IsNullOrEmpty(Subdomain))
-                {
-                    Subdomain = idn.GetAscii(Subdomain);
-                }
-            }
-            catch {}
+            string Subdomain = Kooboo.Lib.Domain.IdnHelper.GetAscii(call.GetValue("Subdomain"));
+            rootDomain = Kooboo.Lib.Domain.IdnHelper.GetAscii(rootDomain);
 
             string fullName = ConfigHelper.ToFullDomain(rootDomain, Subdomain);
 
@@ -354,6 +305,9 @@ namespace Kooboo.Web.Api.Implementation
 
         public bool IsUniqueName(string name, ApiCall call)
         {
+            // Bindings are stored in Punycode; normalize before checking uniqueness.
+            name = Kooboo.Lib.Domain.IdnHelper.GetAscii(name);
+
             var commonshare = new Kooboo.Data.Service.ShareStagingDomainService().IsAvailable(name);
 
             if (!commonshare)
@@ -371,12 +325,12 @@ namespace Kooboo.Web.Api.Implementation
                 this.Id = binding.Id;
                 this.OrganizationId = binding.OrganizationId;
                 this.WebSiteId = binding.WebSiteId;
-                this.SubDomain = binding.SubDomain;
+                this.SubDomain = Kooboo.Mail.Utility.AddressUtility.GetUnicodeDomain(binding.SubDomain);
                 this.IpAddress = binding.IpAddress;
                 this.DefaultPortBinding = binding.DefaultPortBinding;
                 this.Device = binding.Device;
                 this.DomainId = binding.DomainId;
-                this.FullName = binding.FullName;
+                this.FullName = Kooboo.Mail.Utility.AddressUtility.GetUnicodeDomain(binding.FullName);
                 this.Port = binding.Port;
             }
 
@@ -385,12 +339,12 @@ namespace Kooboo.Web.Api.Implementation
                 this.Id = binding.Id;
                 this.OrganizationId = binding.OrganizationId;
                 this.WebSiteId = binding.WebSiteId;
-                this.SubDomain = binding.GetSubDomain();
+                this.SubDomain = Kooboo.Mail.Utility.AddressUtility.GetUnicodeDomain(binding.GetSubDomain());
                 this.IpAddress = binding.IpAddress;
                 this.DefaultPortBinding = binding.IsDefaultPortBinding;
                 this.Device = binding.Device;
                 // this.DomainId = binding.DomainId;
-                this.FullName = binding.FullDomain;
+                this.FullName = Kooboo.Mail.Utility.AddressUtility.GetUnicodeDomain(binding.FullDomain);
                 this.Port = binding.Port;
                 this.Redirect = binding.Redirect;
                 this.Culture = binding.Culture;

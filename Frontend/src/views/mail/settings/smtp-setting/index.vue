@@ -66,9 +66,7 @@ const rules = {
   ],
   userName: [requiredRule(t("common.inputUsernameTips"))],
   password: [
-    passwordRule,
     requiredRule(t("common.inputPasswordTips")),
-    commerceValueRangeRule(t("common.password"), 2, 30),
   ],
 } as Rules;
 

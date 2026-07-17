@@ -42,6 +42,7 @@ namespace Kooboo.Mail.Smtp
         {
             this.ClientIP = remoteIP?.ToString();
             this.RemoteIp = remoteIP;
+            this.ServerHostName = Settings.SmtpDomain;
         }
 
         public void ReSet()
@@ -67,6 +68,8 @@ namespace Kooboo.Mail.Smtp
         public System.Net.IPAddress RemoteIp { get; set; }
 
         public string ClientHostName { get; set; }
+
+        public string ServerHostName { get; set; }
 
         public string UserName { get; set; }
 
@@ -452,7 +455,10 @@ namespace Kooboo.Mail.Smtp
                 {
                     response.Code = 250;
                     response.Seperator = '-';
-                    response.Message = "Hello " + command.Value + "\r\n250-SIZE " + Setting.MaxSmtpSizeString + "\r\n250-STARTTLS\r\n250-AUTH LOGIN\r\n250-SMTPUTF8\r\n250 OK";
+                    // RFC 6531 section 3.1: a server offering SMTPUTF8 MUST also offer
+                    // 8BITMIME (RFC 6152). Strict senders (Exchange/Outlook) check this
+                    // before attempting EAI delivery.
+                    response.Message = this.ServerHostName + " Hello " + command.Value + "\r\n250-SIZE " + Setting.MaxSmtpSizeString + "\r\n250-8BITMIME\r\n250-STARTTLS\r\n250-AUTH LOGIN\r\n250-SMTPUTF8\r\n250 OK";
                     this.State = CommandState.Body;
                     this.ClientHostName = command.Value;
                 }
@@ -541,14 +547,16 @@ namespace Kooboo.Mail.Smtp
             {
                 this.State = CommandState.AuthUser;
 
-                this.UserName = Encoding.ASCII.GetString(Convert.FromBase64String(CommandLine));
+                // UTF-8 so EAI mailbox names (RFC 6531) survive base64 decoding;
+                // ASCII input decodes identically.
+                this.UserName = Encoding.UTF8.GetString(Convert.FromBase64String(CommandLine));
                 response.Code = 334;
                 response.Message = Convert.ToBase64String(Encoding.ASCII.GetBytes("Password:"));
             }
             else if (this.State == CommandState.AuthUser)
             {
                 this.State = CommandState.Body;
-                this.Password = Encoding.ASCII.GetString(Convert.FromBase64String(CommandLine));
+                this.Password = Encoding.UTF8.GetString(Convert.FromBase64String(CommandLine));
 
                 string username = this.UserName;
 

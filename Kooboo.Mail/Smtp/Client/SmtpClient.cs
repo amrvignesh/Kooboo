@@ -145,17 +145,24 @@ namespace Kooboo.Mail.Smtp
             return Command("HELO " + fqdn, SmtpStatusCode.Ok);
         }
 
-        public Task<SmtpReply> MailFrom(string sender)
+        public Task<SmtpReply> MailFrom(string sender, bool smtpUtf8 = false)
         {
+            string command;
             if (sender.Contains("<"))
             {
-                return Command("MAIL FROM: " + sender, SmtpStatusCode.Ok);
+                command = "MAIL FROM: " + sender;
             }
             else
             {
-                return Command("MAIL FROM: <" + sender + ">", SmtpStatusCode.Ok);
+                command = "MAIL FROM: <" + sender + ">";
             }
 
+            if (smtpUtf8)
+            {
+                command += " SMTPUTF8";
+            }
+
+            return Command(command, SmtpStatusCode.Ok);
         }
 
         public Task<SmtpReply> RcptTo(string to)
@@ -261,7 +268,8 @@ namespace Kooboo.Mail.Smtp
 
             foreach (var item in commands)
             {
-                await _pipeStream.Output.WriteLineAsync(item.CommandLine, Encoding.ASCII);
+                var encoding = HasUnicode(item.CommandLine) ? Encoding.UTF8 : Encoding.ASCII;
+                await _pipeStream.Output.WriteLineAsync(item.CommandLine, encoding);
 
                 var reply = await GetReply();
                 var res = CheckReply(reply, item.ExpectedResponse);
@@ -306,7 +314,8 @@ group since their success or failure produces a change of state which
                 }
             }
 
-            await _pipeStream.Output.WriteLineAsync(CommandLines, Encoding.ASCII);
+            var encoding = HasUnicode(CommandLines) ? Encoding.UTF8 : Encoding.ASCII;
+            await _pipeStream.Output.WriteLineAsync(CommandLines, encoding);
 
             var res = await _pipeStream.ReadServerPipeliningResponseAsync(commands.Count());
 
@@ -326,6 +335,11 @@ group since their success or failure produces a change of state which
 
         public List<SendCommand> BuildCommands(string MailFrom, bool IncludeRset, params string[] RcptTo)
         {
+            return BuildCommands(MailFrom, IncludeRset, false, RcptTo);
+        }
+
+        public List<SendCommand> BuildCommands(string MailFrom, bool IncludeRset, bool smtpUtf8, params string[] RcptTo)
+        {
             // return Command("RSET", SmtpStatusCode.Ok);
             List<SendCommand> commands = new List<SendCommand>();
             if (IncludeRset)
@@ -333,7 +347,15 @@ group since their success or failure produces a change of state which
                 commands.Add(new SendCommand() { CommandLine = "RSET", ExpectedResponse = SmtpStatusCode.Ok, Command = "RSET" });
             }
 
-            commands.Add(new SendCommand() { CommandLine = "MAIL FROM: <" + MailFrom + ">", ExpectedResponse = SmtpStatusCode.Ok, Command = "MAILFROM" });
+            // RFC 6531: declare SMTPUTF8 on MAIL FROM when the envelope contains
+            // internationalized addresses (requires the server to advertise SMTPUTF8 in EHLO).
+            string mailFromLine = "MAIL FROM: <" + MailFrom + ">";
+            if (smtpUtf8 || HasUnicode(MailFrom) || RcptTo.Any(HasUnicode))
+            {
+                mailFromLine += " SMTPUTF8";
+            }
+
+            commands.Add(new SendCommand() { CommandLine = mailFromLine, ExpectedResponse = SmtpStatusCode.Ok, Command = "MAILFROM" });
 
             foreach (var item in RcptTo)
             {
@@ -351,9 +373,16 @@ group since their success or failure produces a change of state which
             _tcpClient?.Close();
         }
 
+        private static bool HasUnicode(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return false;
+            return input.Any(c => c > 127);
+        }
+
         private async Task<SmtpReply> Command(string command, SmtpStatusCode statusCode)
         {
-            await _pipeStream.Output.WriteLineAsync(command, Encoding.ASCII, NewToken());
+            var encoding = HasUnicode(command) ? Encoding.UTF8 : Encoding.ASCII;
+            await _pipeStream.Output.WriteLineAsync(command, encoding, NewToken());
 
             var reply = await GetReply();
             return CheckReply(reply, statusCode);
@@ -392,6 +421,8 @@ group since their success or failure produces a change of state which
 
             var reply = await Ehlo(FQDN);
 
+            bool smtpUtf8Supported = reply.Reply != null && reply.Reply.Contains("SMTPUTF8", StringComparison.OrdinalIgnoreCase);
+
             if (reply.Reply != null && reply.Reply.ToLower().Contains("starttls"))
             {
                 reply = await StartTls(Mx);
@@ -403,6 +434,7 @@ group since their success or failure produces a change of state which
                 }
 
                 reply = await Ehlo(FQDN);
+                smtpUtf8Supported = reply.Reply != null && reply.Reply.Contains("SMTPUTF8", StringComparison.OrdinalIgnoreCase);
             }
 
             if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
@@ -415,7 +447,8 @@ group since their success or failure produces a change of state which
                 }
             }
 
-            reply = await MailFrom(mailFrom);
+            bool smtpUtf8 = smtpUtf8Supported && (HasUnicode(mailFrom) || HasUnicode(to));
+            reply = await MailFrom(mailFrom, smtpUtf8);
 
             if (!reply.Ok)
             {

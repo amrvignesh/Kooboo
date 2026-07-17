@@ -12,6 +12,30 @@ namespace Kooboo.Mail.Utility
     {
         private static readonly IdnMapping _idnMapping = new IdnMapping();
 
+        /// <summary>
+        /// Normalize to Unicode Normalization Form C (RFC 6531 recommends NFC for EAI).
+        /// The same visible text (e.g. Tamil, Hindi) can arrive as different code point
+        /// sequences (NFC vs NFD); without this, lookups and hashes silently mismatch.
+        /// </summary>
+        public static string NormalizeUnicode(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                return input;
+            }
+            try
+            {
+                return input.IsNormalized(System.Text.NormalizationForm.FormC)
+                    ? input
+                    : input.Normalize(System.Text.NormalizationForm.FormC);
+            }
+            catch
+            {
+                // Invalid surrogate sequences etc. - return as-is.
+                return input;
+            }
+        }
+
         public static bool IsValidEmailAddress(string input)
         {
             if (string.IsNullOrEmpty(input))
@@ -262,6 +286,10 @@ namespace Kooboo.Mail.Utility
                 return address;
             }
 
+            // NFC-normalize first so equivalent Unicode forms produce the same
+            // canonical address (and the same hash in EmailAddress.ToId).
+            address = NormalizeUnicode(address);
+
             int index = address.LastIndexOf("@");
             if (index > -1 && index < address.Length - 1)
             {
@@ -279,6 +307,49 @@ namespace Kooboo.Mail.Utility
             }
             return address;
         }
+
+        public static string GetUnicodeAddress(string address)
+        {
+            if (string.IsNullOrEmpty(address))
+            {
+                return address;
+            }
+
+            int index = address.LastIndexOf("@");
+            if (index > -1 && index < address.Length - 1)
+            {
+                string local = address.Substring(0, index);
+                string host = address.Substring(index + 1);
+                try
+                {
+                    string unicodeHost = _idnMapping.GetUnicode(host);
+                    return local + "@" + unicodeHost;
+                }
+                catch
+                {
+                    // If IDN conversion fails, return original
+                }
+            }
+            return address;
+        }
+
+        public static string GetUnicodeDomain(string domain)
+        {
+            if (string.IsNullOrEmpty(domain))
+            {
+                return domain;
+            }
+            try
+            {
+                return _idnMapping.GetUnicode(domain);
+            }
+            catch
+            {
+                return domain;
+            }
+        }
+
+
 
         public static EmailSegment ParseSegment(string emailaddress)
         {

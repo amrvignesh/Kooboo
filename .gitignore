@@ -21,3 +21,11 @@ bld/
 *.data
 !*.data/
 *.idx
+**/.fuse_hidden*
+Kooboo.Web/_Admin/assets/
+Kooboo.Web/_Admin/component.html
+Kooboo.Web/_Admin/index.html
+Kooboo.Web/_Admin/monaco.html
+Kooboo.Web/_Admin/page-editor-inject.html
+kooboo-deploy.zip
+publish-output/

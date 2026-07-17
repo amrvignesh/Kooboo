@@ -13,17 +13,15 @@ namespace Kooboo.Lib.Domain
                 return false;
             }
 
-            try
-            {
-                var idn = new System.Globalization.IdnMapping();
-                domain = idn.GetAscii(domain);
-            }
-            catch {}
+            domain = IdnHelper.GetAscii(domain);
 
             if (!IsValidDomainChar(domain))
             {
                 return false;
             }
+
+            domain = domain.ToLower();
+
             var suffix = StringDomainTree.Instance.GetMatchSuffic(domain);
 
             return suffix != null && domain.Length > suffix.Length + 1;
@@ -36,12 +34,7 @@ namespace Kooboo.Lib.Domain
                 return null;
             }
 
-            try
-            {
-                var idn = new System.Globalization.IdnMapping();
-                domain = idn.GetAscii(domain);
-            }
-            catch {}
+            domain = IdnHelper.GetAscii(domain);
 
             if (!IsValidDomainChar(domain))
             {

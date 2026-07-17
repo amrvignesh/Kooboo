@@ -43,6 +43,7 @@ namespace Kooboo.Mail.Smtp
             _cancellationTokenSource = new CancellationTokenSource();
 
             int MailCounter = 0;
+            string resolvedServerHostName = null;
 
             try
             {
@@ -51,21 +52,31 @@ namespace Kooboo.Mail.Smtp
                 if (_server.SSL)
                 {
                     var ssl = new SslStream(_stream, false);
-
-                    X509Certificate2 cert = null;
-
-                    if (this.Local.Port == 587)
+                    var options = new SslServerAuthenticationOptions
                     {
+                        ServerCertificateSelectionCallback = (sender, hostName) =>
+                        {
+                            if (string.IsNullOrEmpty(hostName))
+                            {
+                                hostName = this.Local.Port == 587 ? Settings.Port587SmtpDomain : Settings.SmtpDomain;
+                            }
+                            else
+                            {
+                                resolvedServerHostName = hostName;
+                            }
+                            var cert2 = Settings.LoadCertificateFromFile(hostName) ?? Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(hostName);
+                            if (cert2 == null)
+                            {
+                                cert2 = Settings.LoadCertificateFromFile(this.Local.Port == 587 ? Settings.Port587SmtpDomain : Settings.SmtpDomain) ?? 
+                                        Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(this.Local.Port == 587 ? Settings.Port587SmtpDomain : Settings.SmtpDomain);
+                            }
+                            return cert2;
+                        },
+                        ClientCertificateRequired = false,
+                        EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13
+                    };
 
-                        cert = Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(Settings.Port587SmtpDomain);
-                    }
-                    else
-                    {
-                        cert = Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(Settings.SmtpDomain);
-                    }
-
-
-                    await ssl.AuthenticateAsServerAsync(cert);
+                    await ssl.AuthenticateAsServerAsync(options);
                     _stream = ssl;
                 }
 
@@ -76,6 +87,10 @@ namespace Kooboo.Mail.Smtp
                 _writer = PipeWriter.Create(_stream);
 
                 SmtpSession session = new SmtpSession(this.Client.Address);
+                if (resolvedServerHostName != null)
+                {
+                    session.ServerHostName = resolvedServerHostName;
+                }
 
                 var securityResult = Kooboo.Mail.SecurityControl.Manager.Check(this.Client.Address);
                 if (!securityResult.CanConnect)
@@ -100,34 +115,51 @@ namespace Kooboo.Mail.Smtp
                     if (response.SendResponse)
                     {
                         var responseline = response.Render();
+                        if (_stream is System.Net.Security.SslStream)
+                        {
+                            responseline = responseline.Replace("250-STARTTLS\r\n", "");
+                        }
                         await WriteLineAsync(responseline);
                     }
 
                     if (response.StartTls)
                     {
-
-                        X509Certificate2 cert = null;
-
-                        if (this.Local.Port == 587)
-                        {
-                            cert = Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(Settings.Port587SmtpDomain);
-                        }
-                        else
-                        {
-                            cert = Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(Settings.SmtpDomain);
-                        }
-
-
                         var sslStream = new System.Net.Security.SslStream(_stream, false, ValidateCertificate);
+                        var options = new SslServerAuthenticationOptions
+                        {
+                            ServerCertificateSelectionCallback = (sender, hostName) =>
+                            {
+                                if (string.IsNullOrEmpty(hostName))
+                                {
+                                    hostName = this.Local.Port == 587 ? Settings.Port587SmtpDomain : Settings.SmtpDomain;
+                                }
+                                else
+                                {
+                                    resolvedServerHostName = hostName;
+                                }
+                                var cert2 = Settings.LoadCertificateFromFile(hostName) ?? Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(hostName);
+                                if (cert2 == null)
+                                {
+                                    cert2 = Settings.LoadCertificateFromFile(this.Local.Port == 587 ? Settings.Port587SmtpDomain : Settings.SmtpDomain) ?? 
+                                            Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(this.Local.Port == 587 ? Settings.Port587SmtpDomain : Settings.SmtpDomain);
+                                }
+                                return cert2;
+                            },
+                            ClientCertificateRequired = false,
+                            EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13
+                        };
 
-                        // sslStream.AuthenticateAsServer(cert, false, false);
-                        sslStream.AuthenticateAsServer(cert, true, true);
+                        sslStream.AuthenticateAsServer(options);
 
                         _stream = sslStream;
                         _reader = PipeReader.Create(_stream);
                         _writer = PipeWriter.Create(_stream);
                         session.ReSet();
                         session.State = SmtpSession.CommandState.Helo;
+                        if (resolvedServerHostName != null)
+                        {
+                            session.ServerHostName = resolvedServerHostName;
+                        }
                     }
 
                     if (response.SessionCompleted)
@@ -265,7 +297,9 @@ namespace Kooboo.Mail.Smtp
         private async Task WriteLineAsync(string line)
         {
             MailLogger.WriteLine(_stream, line, $"SMTP", false);
-            await _writer.WriteLineAsync(line, Encoding.ASCII, 30);
+            // UTF-8 is a strict ASCII superset; required for RFC 6531 responses that
+            // echo internationalized addresses (previously Unicode became '?').
+            await _writer.WriteLineAsync(line, Encoding.UTF8, 30);
             await _writer.FlushAsync();
         }
 

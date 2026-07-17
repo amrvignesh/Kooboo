@@ -50,7 +50,12 @@ namespace Kooboo.Web.Api.Implementation.Mails
             {
                 DomainList = Data.GlobalDb.Domains.ListForEmail(apiCall.Context.User);
             }
-            return RemoveUnKoobooDns(DomainList);
+            var list = RemoveUnKoobooDns(DomainList);
+            foreach (var item in list)
+            {
+                item.DomainName = Kooboo.Mail.Utility.AddressUtility.GetUnicodeDomain(item.DomainName);
+            }
+            return list;
         }
 
         private List<Data.Models.Domain> RemoveUnKoobooDns(List<Data.Models.Domain> input)
@@ -235,7 +240,9 @@ namespace Kooboo.Web.Api.Implementation.Mails
             var orgdb = Kooboo.Mail.Factory.DBFactory.OrgDb(user.CurrentOrgId);
             var address = new EmailAddress
             {
-                Address = model.ToEmail().ToLower(),
+                // NFC normalization keeps stored Unicode addresses in canonical form
+                // so incoming-mail lookups (hash-based) always match.
+                Address = Kooboo.Mail.Utility.AddressUtility.NormalizeUnicode(model.ToEmail()).ToLowerInvariant(),
                 ForwardAddress = model.ForwardAddress,
                 AddressType = model.AddressType,
                 UserId = user.Id,
@@ -304,6 +311,11 @@ namespace Kooboo.Web.Api.Implementation.Mails
             string address = call.GetValue("address");
             var findOriginDefaultSender = orgdb.Email.GetDefaultSender(call.Context.User);
             var mail = orgdb.Email.Find(address);
+
+            if (mail == null)
+            {
+                return false;
+            }
 
             if (findOriginDefaultSender != null)
             {
@@ -604,8 +616,13 @@ namespace Kooboo.Web.Api.Implementation.Mails
             }
 
             var address = call.GetValue<string>("address");
-            var email = orgdb.Email.Find(address);
             if (string.IsNullOrEmpty(address))
+            {
+                return string.Empty;
+            }
+
+            var email = orgdb.Email.Find(address);
+            if (email == null)
             {
                 return string.Empty;
             }
@@ -674,12 +691,13 @@ namespace Kooboo.Web.Api.Implementation.Mails
 
             public static AddressItemModel FromAddress(EmailAddress address)
             {
+                string unicodeAddress = Kooboo.Mail.Utility.AddressUtility.GetUnicodeAddress(address.Address);
                 var result = new AddressItemModel
                 {
                     //AddressOld = address,
                     AddressType = address.AddressType,
                     Name = address.Name,
-                    Address = address.Address,
+                    Address = unicodeAddress,
                     Id = address.Id,
                     UserId = address.UserId,
                     ForwardAddress = address.ForwardAddress,
@@ -692,17 +710,17 @@ namespace Kooboo.Web.Api.Implementation.Mails
                     result.Count = address.Members.Count();
                 }
 
-                string name = address.Address;
+                string name = unicodeAddress;
 
                 if (!string.IsNullOrWhiteSpace(address.Name))
                 {
-                    if (address.Address.Contains("<"))
+                    if (unicodeAddress.Contains("<"))
                     {
-                        name = address.Name + " " + address.Address;
+                        name = address.Name + " " + unicodeAddress;
                     }
                     else
                     {
-                        name = address.Name + " <" + address.Address + ">";
+                        name = address.Name + " <" + unicodeAddress + ">";
                     }
                 }
                 result.DisplayName = name;

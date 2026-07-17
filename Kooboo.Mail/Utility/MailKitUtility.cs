@@ -31,8 +31,36 @@ namespace Kooboo.Mail.Utility
 
                     var from = MailboxAddress.Parse(MailFrom);
                     var tos = GetMailKitAddressList(RCPTTO);
-                    client.Send(msg, from, tos);
 
+                    // RFC 6531 (SMTPUTF8 / EAI): a Unicode local part cannot be downgraded.
+                    // Unicode domains are punycoded automatically by MailKit, but Unicode
+                    // local parts require the next hop to advertise SMTPUTF8.
+                    bool needSmtpUtf8 = HasUnicodeLocalPart(from) || tos.Any(HasUnicodeLocalPart);
+
+                    if (needSmtpUtf8)
+                    {
+                        if ((client.Capabilities & SmtpCapabilities.UTF8) == SmtpCapabilities.UTF8)
+                        {
+                            var options = FormatOptions.Default.Clone();
+                            options.International = true;
+                            client.Send(options, msg, from, tos);
+                        }
+                        else
+                        {
+                            client.Disconnect(true);
+                            log.LogItem.IsSuccess = false;
+                            log.LogItem.LogLines.Add(new LogLine()
+                            {
+                                CMD = "Delivery failed: remote server " + remoteServer +
+                                      " does not support the SMTPUTF8 extension required for internationalized email addresses.",
+                                IsServer = true
+                            });
+                        }
+                    }
+                    else
+                    {
+                        client.Send(msg, from, tos);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -75,6 +103,23 @@ namespace Kooboo.Mail.Utility
             return new ActionResponse() { Success = false, ShouldRetry = false, Message = "Message body error" };
         }
 
+
+        /// <summary>
+        /// True when the local part (before @) of the address contains non-ASCII
+        /// characters, which requires SMTPUTF8 (RFC 6531). Unicode in the domain part
+        /// alone can be downgraded to Punycode and does not require SMTPUTF8.
+        /// </summary>
+        internal static bool HasUnicodeLocalPart(MailboxAddress address)
+        {
+            var addr = address?.Address;
+            if (string.IsNullOrEmpty(addr))
+            {
+                return false;
+            }
+            int index = addr.LastIndexOf('@');
+            var local = index > -1 ? addr.Substring(0, index) : addr;
+            return local.Any(c => c > 127);
+        }
 
         //This is copy from Mail Sender...
         private static string GetLog(LogItem item)

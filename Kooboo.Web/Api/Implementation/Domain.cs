@@ -109,7 +109,7 @@ namespace Kooboo.Web.Api.Implementation
 
                 DomainSummaryViewModel model = new DomainSummaryViewModel();
                 model.Id = item.Id;
-                model.DomainName = item.DomainName;
+                model.DomainName = Kooboo.Mail.Utility.AddressUtility.GetUnicodeDomain(item.DomainName);
                 model.NameServer = item.NameServer;
                 model.Source = item.Source;
 
@@ -198,7 +198,7 @@ namespace Kooboo.Web.Api.Implementation
                 {
                     DomainBindingViewModel model = new DomainBindingViewModel();
                     model.Id = item.Id;
-                    model.SubDomain = item.GetSubDomain();
+                    model.SubDomain = Kooboo.Mail.Utility.AddressUtility.GetUnicodeDomain(item.GetSubDomain());
                     model.WebSiteName = site.Name;
                     result.Add(model);
                 }
@@ -266,6 +266,10 @@ namespace Kooboo.Web.Api.Implementation
 
         public void Create(string domainname, ApiCall call)
         {
+            // Normalize IDN input to Punycode so the stored domain matches
+            // Punycode-keyed lookups (bindings, mail, SSL).
+            domainname = Kooboo.Lib.Domain.IdnHelper.GetAscii(domainname);
+
             var rootdomain = Kooboo.Data.Helper.DomainHelper.GetRootDomain(domainname);
 
             if (string.IsNullOrEmpty(rootdomain))
@@ -317,12 +321,7 @@ namespace Kooboo.Web.Api.Implementation
         {
             EnsureDnsRight(call);
 
-            try
-            {
-                var idn = new System.Globalization.IdnMapping();
-                domain = idn.GetAscii(domain);
-            }
-            catch {}
+            domain = Kooboo.Lib.Domain.IdnHelper.GetAscii(domain);
 
             var url = Data.Helper.AccountUrlHelper.Domain("Records");
 
@@ -368,12 +367,7 @@ namespace Kooboo.Web.Api.Implementation
         {
             EnsureDnsRight(call);
 
-            try
-            {
-                var idn = new System.Globalization.IdnMapping();
-                Domain = idn.GetAscii(Domain);
-            }
-            catch {}
+            Domain = Kooboo.Lib.Domain.IdnHelper.GetAscii(Domain);
 
             var url = Kooboo.Data.Helper.AccountUrlHelper.Domain("AssignDataCenter");
             var para = new Dictionary<string, string>();
@@ -394,19 +388,8 @@ namespace Kooboo.Web.Api.Implementation
 
             if (model != null)
             {
-                try
-                {
-                    var idn = new System.Globalization.IdnMapping();
-                    if (!string.IsNullOrEmpty(model.Domain))
-                    {
-                        model.Domain = idn.GetAscii(model.Domain);
-                    }
-                    if (!string.IsNullOrEmpty(model.Host))
-                    {
-                        model.Host = idn.GetAscii(model.Host);
-                    }
-                }
-                catch {}
+                model.Domain = Kooboo.Lib.Domain.IdnHelper.GetAscii(model.Domain);
+                model.Host = Kooboo.Lib.Domain.IdnHelper.GetAscii(model.Host);
             }
 
             var url = Kooboo.Data.Helper.AccountUrlHelper.Domain("AddDns");
@@ -438,12 +421,7 @@ namespace Kooboo.Web.Api.Implementation
 
         public string GetTransferCode(string domain, ApiCall call)
         {
-            try
-            {
-                var idn = new System.Globalization.IdnMapping();
-                domain = idn.GetAscii(domain);
-            }
-            catch {}
+            domain = Kooboo.Lib.Domain.IdnHelper.GetAscii(domain);
 
             var url = Kooboo.Data.Helper.AccountUrlHelper.Domain("GetTransferCode");
 

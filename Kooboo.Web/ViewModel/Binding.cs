@@ -41,5 +41,9 @@ namespace Kooboo.Web.ViewModel
         public string Device { get; set; }
 
         public int Port { get; set; }
+
+        public bool EnableSsl { get; set; }
+
+        public string SslError { get; set; }
     }
 }

@@ -1,5 +1,7 @@
-﻿using System;
+using System;
+using System.IO;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Kooboo.Mail.Models;
 
@@ -43,7 +45,10 @@ namespace Kooboo.Mail
                     var smtpSetting = orgDb.SmtpGet();
                     if (smtpSetting != null && !string.IsNullOrWhiteSpace(smtpSetting.Server) && smtpSetting.Port > 0)
                     {
-                        return new SendSetting() { OkToSend = true, CustomSmtp = true, Server = smtpSetting.Server, UserName = smtpSetting.UserName, Password = smtpSetting.Password, HostName = System.Net.Dns.GetHostName() };
+                        // Port must be copied from the configured SMTP setting; otherwise
+                        // SendSetting defaults to 25, which cloud providers (OCI, AWS, GCP)
+                        // block for outbound traffic.
+                        return new SendSetting() { OkToSend = true, CustomSmtp = true, Server = smtpSetting.Server, Port = smtpSetting.Port, UserName = smtpSetting.UserName, Password = smtpSetting.Password, HostName = System.Net.Dns.GetHostName() };
                     }
                 }
 
@@ -105,6 +110,51 @@ namespace Kooboo.Mail
         {
             get; set;
 
+        }
+
+        public static X509Certificate2 LoadCertificateFromFile(string hostName)
+        {
+            if (string.IsNullOrEmpty(hostName))
+            {
+                return null;
+            }
+
+            // Normalize hostname (idn to ascii) to match directory name if idn is used
+            string asciiHost = Kooboo.Lib.Domain.IdnHelper.GetAscii(hostName).ToLower();
+
+            string currentHost = asciiHost;
+            while (!string.IsNullOrEmpty(currentHost) && currentHost.Contains("."))
+            {
+                string certFolder = $"/etc/letsencrypt/live/{currentHost}";
+                string certPath = Path.Combine(certFolder, "fullchain.pem");
+                string keyPath = Path.Combine(certFolder, "privkey.pem");
+
+                if (File.Exists(certPath) && File.Exists(keyPath))
+                {
+                    try
+                    {
+                        // Natively load PEM certificate in modern .NET
+                        return X509Certificate2.CreateFromPemFile(certPath, keyPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Kooboo.Data.Log.Instance.Exception.Write($"Failed to load PEM certificate for {currentHost} from {certFolder}: {ex}");
+                    }
+                }
+
+                // Strip the first subdomain part to fallback to parent domains/wildcards
+                int firstDot = currentHost.IndexOf('.');
+                if (firstDot >= 0 && firstDot < currentHost.Length - 1)
+                {
+                    currentHost = currentHost.Substring(firstDot + 1);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return null;
         }
 
     }

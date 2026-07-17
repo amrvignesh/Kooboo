@@ -128,12 +128,7 @@ namespace Kooboo.Lib.Domain
                 domainSuffix = domainSuffix.Substring(2);
             }
 
-            try
-            {
-                var idn = new System.Globalization.IdnMapping();
-                domainSuffix = idn.GetAscii(domainSuffix);
-            }
-            catch {}
+            domainSuffix = IdnHelper.GetAscii(domainSuffix);
 
             var currentPath = this.Root;
 

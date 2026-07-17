@@ -66,13 +66,13 @@ export function rangeRule(min: number, max: number) {
 }
 
 export const frontEmailRule = {
-  pattern: /^[a-zA-Z0-9.+_-]{1,}$/g,
+  pattern: /^[a-zA-Z0-9.+_\u0080-\uFFFF-]{1,}$/,
   message: $t("common.inputCorrectEmailTips"),
   trigger: "blur",
 };
 
 export const wildcardEmailRule = {
-  pattern: /^[A-Za-z0-9.+_-]*\*?[A-Za-z0-9.+_-]*$/,
+  pattern: /^[A-Za-z0-9.+_\u0080-\uFFFF-]*\*?[A-Za-z0-9.+_\u0080-\uFFFF-]*$/,
   message: $t("common.inputCorrectEmailTips"),
   trigger: "blur",
 };
@@ -97,7 +97,7 @@ export function simpleNameRule(
 
 export function domainSearchRule(message = $t("common.domainSearchTips")) {
   return {
-    pattern: /^([a-zA-Z\d\-\.])*$/,
+    pattern: /^([a-zA-Z\d\-\.\u0080-\uFFFF])*$/,
     message: () => message,
   };
 }
@@ -106,7 +106,7 @@ export function notAllowMultilevelDomain(
   message = $t("common.atMostOnePointCharacter")
 ) {
   return {
-    pattern: /^[A-Za-z0-9-]*\.?[A-Za-z0-9-]*$/,
+    pattern: /^[A-Za-z0-9\u0080-\uFFFF-]*\.?[A-Za-z0-9\u0080-\uFFFF-]*$/,
     message: () => message,
   };
 }
@@ -170,17 +170,17 @@ export const passwordLengthRule = {
 };
 
 export const subDomainRule = {
-  pattern: /^([A-Za-z0-9][A-Za-z0-9_]{0,})*[A-Za-z0-9]$/,
+  pattern: /^([A-Za-z0-9\u0080-\uFFFF][A-Za-z0-9_\u0080-\uFFFF]{0,})*[A-Za-z0-9\u0080-\uFFFF]$/,
   message: $t("common.subDomainInvalidTips"),
 };
 
 export const DomainRule = {
-  pattern: /^[A-Za-z][\w\-]*$/,
+  pattern: /^[A-Za-z\u0080-\uFFFF][\w\-\u0080-\uFFFF]*$/,
   message: $t("common.domainInvalid"),
 };
 
 export const hostRecordRule = {
-  pattern: /^(?!\.)(?!.*\.$)[a-zA-Z0-9-_.]+$/,
+  pattern: /^(?!\.)(?!.*\.$)[a-zA-Z0-9\u0080-\uFFFF\-_.]+$/,
   message: $t("common.domainInvalid"),
 };
 
@@ -234,7 +234,7 @@ export const usernameRules = [
 ];
 
 export const emailRule = {
-  pattern: /^[a-zA-Z0-9.+_-]{1,}@[a-z0-9-]{1,}[a-z0-9](\.[a-z]{1,})+$/g,
+  pattern: /^[a-zA-Z0-9.+_\u0080-\uFFFF-]{1,}@[a-zA-Z0-9_\u0080-\uFFFF-]{1,}(\.[a-zA-Z0-9_\u0080-\uFFFF-]{1,})+$/,
   message: $t("common.inputCorrectEmailTips"),
   trigger: "blur",
 };
@@ -461,7 +461,7 @@ export const toEmailRule = () => {
     ) {
       for (const i of value) {
         if (
-          !/^[\"]{0,}[\s\S]{1,}[\"]{0,}[\<]{0,}[a-zA-Z0-9.+_-]{0,}@[A-Za-z0-9-_]{1,}(\.[a-z-_]{1,}[\>]{0,})+$/g.test(
+          !/^[\"]{0,}[\s\S]{1,}[\"]{0,}[\<]{0,}[a-zA-Z0-9.+_\u0080-\uFFFF-]{0,}@[A-Za-z0-9_\u0080-\uFFFF-]{1,}(\.[A-Za-z0-9_\u0080-\uFFFF-]{1,}[\>]{0,})+$/.test(
             i
           )
         ) {

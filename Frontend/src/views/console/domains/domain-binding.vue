@@ -26,6 +26,31 @@
           </a>
         </template>
       </el-table-column>
+      <el-table-column :label="t('common.SSLEnabled')">
+        <template #default="{ row }">
+          <div class="flex items-center">
+            <el-tooltip
+              class="box-item"
+              effect="dark"
+              :content="row.enableSsl ? '' : t('common.enableSSL')"
+              :disabled="row.enableSsl"
+              placement="top"
+            >
+              <el-switch
+                :model-value="row.enableSsl"
+                :disabled="row.enableSsl"
+                data-cy="ssl-enabled"
+                @update:model-value="onEnableSSL(row)"
+              />
+            </el-tooltip>
+
+            <ElTag v-if="row.sslError" round type="danger" class="ml-4"
+              >{{ t("common.failed") }}
+              <Tooltip :tip="row.sslError" custom-class="ml-4" />
+            </ElTag>
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column width="150px" align="center">
         <template #default="{ row }">
           <el-button type="primary" round @click="preview(row.fullName)">{{
@@ -57,6 +82,23 @@ import {
 } from "@/api/console";
 import { openInNewTab } from "@/utils/url";
 import { showDeleteConfirm } from "@/components/basic/confirm";
+import { verifySSL, setSsl } from "@/api/binding";
+
+const onEnableSSL = async (row: any) => {
+  try {
+    await verifySSL({
+      rootDomain: row.fullName,
+    });
+
+    await setSsl({
+      rootDomain: row.fullName,
+    });
+  } catch (error) {
+    //
+  }
+
+  load();
+};
 
 const { t } = useI18n();
 

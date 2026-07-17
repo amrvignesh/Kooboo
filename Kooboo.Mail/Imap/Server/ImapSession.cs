@@ -155,10 +155,26 @@ namespace Kooboo.Mail.Imap
         public async Task StartSecureConnection()
         {
             var sslStream = new SslStream(TcpClient.GetStream(), false);
+            var options = new SslServerAuthenticationOptions
+            {
+                ServerCertificateSelectionCallback = (sender, hostName) =>
+                {
+                    if (string.IsNullOrEmpty(hostName))
+                    {
+                        hostName = Settings.ImapDomain;
+                    }
+                    var cert2 = Settings.LoadCertificateFromFile(hostName) ?? Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(hostName);
+                    if (cert2 == null)
+                    {
+                        cert2 = Settings.LoadCertificateFromFile(Settings.ImapDomain) ?? Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(Settings.ImapDomain);
+                    }
+                    return cert2;
+                },
+                ClientCertificateRequired = false,
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
+            };
 
-            var cert = Kooboo.Data.SSL.SslCertificateProvider.SelectCertificate2(Settings.ImapDomain);
-
-            await sslStream.AuthenticateAsServerAsync(cert, false, SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13, false);
+            await sslStream.AuthenticateAsServerAsync(options, CancellationToken.None);
 
             IsSecureConnection = true;
 
